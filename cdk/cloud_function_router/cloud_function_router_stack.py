@@ -42,26 +42,26 @@ class CloudFunctionRouterStack(Stack):
 
     def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
-        cluster_1_api = self._create_api_cluster("cluster_1")
-        cluster_2_api = self._create_api_cluster("cluster_2")
+        cluster_a_api = self._create_api_cluster("cluster_a")
+        cluster_b_api = self._create_api_cluster("cluster_b")
         tenant_cluster_store = aws_cloudfront.KeyValueStore(
             self,
             "tenant_cluster_store",
         )
-        distribution = self._provision_distribution(tenant_cluster_store, cluster_1_api)
+        distribution = self._provision_distribution(tenant_cluster_store, cluster_a_api)
         distribution.add_behavior(
-            "/cluster_1/*",
-            aws_cloudfront_origins.RestApiOrigin(cluster_1_api),
+            "/cluster_a/*",
+            aws_cloudfront_origins.RestApiOrigin(cluster_a_api),
         )
         distribution.add_behavior(
-            "/cluster_2/*",
-            aws_cloudfront_origins.RestApiOrigin(cluster_2_api),
+            "/cluster_b/*",
+            aws_cloudfront_origins.RestApiOrigin(cluster_b_api),
         )
         self._provision_tenant_onboarding(
             tenant_cluster_store,
             {
-                "CLUSTER_1": urlparse(cluster_1_api.url).netloc,
-                "CLUSTER_2": urlparse(cluster_2_api.url).netloc,
+                "CLUSTER_A": urlparse(cluster_a_api.url).netloc,
+                "CLUSTER_B": urlparse(cluster_b_api.url).netloc,
             },
         )
 
@@ -118,7 +118,7 @@ class CloudFunctionRouterStack(Stack):
             event_type=aws_cloudfront.FunctionEventType.VIEWER_REQUEST,
             function=cff_tenant_router,
         )
-        return aws_cloudfront.Distribution(
+        distribution = aws_cloudfront.Distribution(
             self,
             "cf_distribution",
             default_behavior=aws_cloudfront.BehaviorOptions(
@@ -126,6 +126,14 @@ class CloudFunctionRouterStack(Stack):
                 function_associations=[function_association],
             ),
         )
+        CfnOutput(
+            self,
+            "DistributionUrl",
+            value=f"https://{distribution.distribution_domain_name}",
+            description="CloudFront Distribution URL",
+            export_name="CloudFrontDistributionUrl",
+        )
+        return distribution
 
     def _create_api_cluster(self, name):
         """Provision an API Gateway + Lambda which represents a cluster API which hosts multiple tenants."""
